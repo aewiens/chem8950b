@@ -35,6 +35,7 @@ class UHF:
 
 		Hcore, G, Da, Db, X = self.Hcore, self.G, self.Da, self.Db, self.X
 
+		self.converged = False
 		for i in range( self.maxit ):
 
 			va = np.einsum("mnrs,ns->mr",G,Da) - np.einsum("mnsr,ns->mr",G,Da) + np.einsum("mnrs,ns->mr",G,Db)
@@ -65,13 +66,23 @@ class UHF:
 			print("UHF  {:>4} {: >21.11}  {: >21.11}".format(i,E,dE))
 
 			if dE < self.conv:
+				self.converged = True
 				break
-				print("\nUHF has converged.\nFinal UHF energy:{:20.11f}".format(self.E))
 
 			##  save
 			self.Da, self.Db, self.E = Da, Db, E
 
+		self.write_output()
 		return self.E
+
+    def write_output(self):
+        if self.converged:
+            print("\nUHF procedure has converged.\nFinal UHF energy:{:20.11f}".format(self.E) )
+
+        if not self.converged:
+            print("UHF procedure did not converge. Sorry")
+
+        return None
 
 
 def get_nelec(mol):
