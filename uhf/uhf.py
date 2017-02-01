@@ -14,7 +14,10 @@ class UHF(object):
 		self.Na  = int( 0.5*(nelec+mult-1) )
 		self.Nb  = nelec - self.Na
 		self.E   = 0
-		self.mol = molecule
+
+		self.mol   = molecule
+		self.mints = mints
+		self.loadIntegrals()
 
 
 	def getNelec(self,mol):
@@ -26,6 +29,7 @@ class UHF(object):
 
 
 	def loadIntegrals(self):
+		mints = self.mints
 
 		V = np.array( mints.ao_potential() )
 		T = np.array( mints.ao_kinetic() )
@@ -42,8 +46,6 @@ class UHF(object):
 
 
 	def computeEnergy(self):
-
-		self.loadIntegrals()
 
 		H  = self.Hcore
 		G  = self.G
@@ -110,7 +112,7 @@ if __name__ == '__main__':
 	molecule   = psi4.geometry( config['DEFAULT']['molecule'] )
 	molecule.update_geometry()
 
-	basis = psi4.core.BasisSet.build(molecule, "BASIS", config['DEFAULT']['basis'])
+	basis = psi4.core.BasisSet.build(molecule, "BASIS", config['DEFAULT']['basis'],puream=0)
 	mints = psi4.core.MintsHelper(basis)
 
 	uhf   = UHF(molecule,mints)
