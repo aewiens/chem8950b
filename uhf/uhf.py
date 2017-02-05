@@ -31,23 +31,22 @@ class UHF(object):
 	def loadIntegrals(self):
 		mints = self.mints
 
-		V = np.array( mints.ao_potential() )
-		T = np.array( mints.ao_kinetic() )
-		G = np.array( mints.ao_eri() )
-
+		self.V = np.array( mints.ao_potential() )
+		self.T = np.array( mints.ao_kinetic() )
+		self.G = np.array( mints.ao_eri() )
 		self.S     = np.array( mints.ao_overlap() )
-		self.Hcore = T + V
-		self.G     = G.transpose((0,2,1,3))
+
+		self.G     = self.G.transpose((0,2,1,3))
 		self.X     = np.matrix( la.funm(self.S, lambda x : x**(-0.5) ) )
 		self.Da    = np.zeros(self.X.shape)
 		self.Db    = np.zeros(self.X.shape)
-
+	
 		return None
 
 
 	def computeEnergy(self):
 
-		H  = self.Hcore
+		H  = self.T + self.V
 		G  = self.G
 		Da = self.Da
 		Db = self.Db
