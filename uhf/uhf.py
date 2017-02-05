@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
 import psi4, numpy as np, configparser
-from  scipy import linalg as la
-
 
 class UHF(object):
 
@@ -34,12 +32,14 @@ class UHF(object):
 		self.V = np.array( mints.ao_potential() )
 		self.T = np.array( mints.ao_kinetic() )
 		self.G = np.array( mints.ao_eri() )
-		self.S     = np.array( mints.ao_overlap() )
+		self.G = self.G.transpose((0,2,1,3))
 
-		self.G     = self.G.transpose((0,2,1,3))
-		self.X     = np.matrix( la.funm(self.S, lambda x : x**(-0.5) ) )
-		self.Da    = np.zeros(self.X.shape)
-		self.Db    = np.zeros(self.X.shape)
+		self.S = mints.ao_overlap()
+		self.S.power(-0.5, 1.e-16)
+		self.X = self.S.to_array() 
+
+		self.Da = np.zeros_like(self.S)
+		self.Db = np.zeros_like(self.S)
 	
 		return None
 
@@ -64,8 +64,8 @@ class UHF(object):
 			tFa = X.dot(Fa.dot(X))
 			tFb = X.dot(Fb.dot(X))
 
-			ea, tCa = la.eigh(tFa)
-			eb, tCb = la.eigh(tFb)
+			ea, tCa = np.linalg.eigh(tFa)
+			eb, tCb = np.linalg.eigh(tFb)
 
 			Ca = X.dot(tCa)
 			Cb = X.dot(tCb)
