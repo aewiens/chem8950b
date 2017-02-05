@@ -13,9 +13,7 @@ class UHF(object):
 		self.Nb  = nelec - self.Na
 		self.E   = 0
 
-		self.mol   = molecule
-		self.mints = mints
-		self.loadIntegrals()
+		self.getIntegrals(mints)
 
 
 	def getNelec(self,mol):
@@ -26,8 +24,7 @@ class UHF(object):
 		return int(nelec)
 
 
-	def loadIntegrals(self):
-		mints = self.mints
+	def getIntegrals(self,mints):
 
 		self.V = np.array( mints.ao_potential() )
 		self.T = np.array( mints.ao_kinetic() )
