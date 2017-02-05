@@ -14,10 +14,10 @@ class OS(object):
 		self.mol   = molecule
 		self.uhf   = uhfObject
 		self.S     = np.zeros(( basis.nao(),basis.nao() ))
-		self.T     = np.zeros(( self.S.shape ))
-		self.dx    = np.zeros(( self.S.shape ))
-		self.dy    = np.zeros(( self.S.shape ))
-		self.dz    = np.zeros(( self.S.shape ))
+		self.T     = np.zeros_like(self.S)
+		self.dx    = np.zeros_like(self.S)
+		self.dy    = np.zeros_like(self.S)
+		self.dz    = np.zeros_like(self.S)
 
 		print('The number of shells: %d' % (basis.nshell()))
 		print('The number of basis functions: %d' % (basis.nao()))
