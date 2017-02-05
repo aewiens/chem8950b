@@ -80,10 +80,15 @@ class UHF(object):
 			E = np.trace( (H+0.5*va).dot(Da) ) + np.trace( (H+0.5*vb).dot(Db) ) + self.Vnu
 			dE = np.fabs(E-E0)
 
-			print("UHF  {:>4} {: >21.11}  {: >21.11}".format(i,E,dE))
+			if __name__ == '__main__':
+				print("UHF  {:>4} {: >21.11}  {: >21.11}".format(i,E,dE))
 
 			if dE < 1e-12:
+
 				self.converged = True
+				if __name__ == '__main__':
+					self.writeOutput()
+
 				break
 
 			##  save
@@ -91,7 +96,6 @@ class UHF(object):
 			self.Db = Db
 			self.E  = E
 
-		self.writeOutput()
 		return E
 
 
