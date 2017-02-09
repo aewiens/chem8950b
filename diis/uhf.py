@@ -128,11 +128,10 @@ class UHF(object):
 
 	def solveDIIS(self,focks,densities):
 
-		S  = self.S
 		errorVectors = []
 		for (fa,fb), (da,db) in zip(focks,densities):
-			ea = fa@da@S - S@da@fa
-			eb = fb@db@S - S@db@fb
+			ea = fa@da@self.S - self.S@da@fa
+			eb = fb@db@self.S - self.S@db@fb
 			errorVectors.append( (ea,eb) )
 
 		N  = len(errorVectors)
