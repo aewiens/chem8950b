@@ -1,29 +1,26 @@
 #!/usr/bin/env python3
 import psi4, numpy as np, configparser as cfp
 
-
 class UHF(object):
 
-	def __init__(self,molecule,mints,maxiter,conv,diis=False,diisStart=0,diisNvector=0):
+	def __init__(self,molecule,mints,maxiter,conv,diis=1,diisStart=4,diisNvector=6):
 
-		self.maxiter = maxiter 
-		self.conv    = conv
+		self.maxiter = int(maxiter)
+		self.conv    = float(conv)
 
 		self.Na   = self.getNelec(molecule,spin='alpha')
 		self.Nb   = self.getNelec(molecule,spin='beta')
 		self.Vnu  = molecule.nuclear_repulsion_energy()
 		self.E    = 0
-		self.diis = diis
+		self.diis = int(diis)
 
 		self.getIntegrals(mints)
 
 		if diis:
-			self.diisStart = diisStart
-			self.diisNvec  = diisNvector
-			self.Falphas   = []
-			self.Fbetas    = []
-			self.Dalphas   = []
-			self.Dbetas    = []
+			self.diisStart = int(diisStart)
+			self.diisNvec  = int(diisNvector)
+			self.focks = []
+			self.densities = []
 
 		self.converged = False
 
@@ -61,15 +58,20 @@ class UHF(object):
 
 			if self.diis and i >= self.diisStart:
 
-				self.Falphas.append(fa)
-				self.Dalphas.append(Da)
-				self.Fbetas.append(fb)
-				self.Dbetas.append(Db)
+				self.focks.append((fa,fb))
+				self.densities.append((Da,Db))
 
-				diisInfo = self.diisHelper( [self.Falphas, self.Dalphas, self.Fbetas, self.Dbetas ] )
-				fa, fb   = self.solveDIIS(*diisInfo)
-			
-			tfa  = X@fa@X
+				N = len(self.focks)
+				start = 0
+				if N > self.diisNvec:
+					start = N - self.diisNvec
+
+				focks = self.focks[start:N]
+				densities = self.densities[start:N]
+
+				fa, fb = self.solveDIIS(focks,densities)	
+
+			tfa = X@fa@X
 			tfb = X@fb@X
 
 			ea, tCa = np.linalg.eigh(tfa)
@@ -91,10 +93,10 @@ class UHF(object):
 				print("UHF  {:>4} {: >21.11}  {: >21.11}".format(i,E,dE))
 
 			if dE < self.conv:
-
 				self.converged = True
+
 				if __name__ == '__main__':
-					self.writeOutput()
+					print("\nUHF procedure has converged.\nFinal UHF energy:{:20.11f}".format(self.E) )
 				break
 
 			self.Da = Da
@@ -102,6 +104,7 @@ class UHF(object):
 			self.E  = E
 
 		return E
+
 
 
 	def getNelec(self,mol,spin='alpha'):
@@ -115,58 +118,41 @@ class UHF(object):
 
 		Na =  0.5*(nelec+mult-1)
 
-		if   spin== 'alpha':   return int(Na)
-		elif spin== 'beta':    return int(nelec - Na)
+		if   spin == 'alpha':   
+			return int(Na)
+
+		elif spin == 'beta':
+			return int(nelec - Na)
 
 
-	def diisHelper(self,ListOfArrays):
 
-		N = len(ListOfArrays[0])
-		if N  <= self.diisNvec:
-			return ListOfArrays
+	def solveDIIS(self,focks,densities):
 
-		elif N > self.diisNvec:
-			start = N - self.diisNvec
-			return [ array[start:N] for array in ListOfArrays ]
+		S  = self.S
+		errorVectors = []
+		for (fa,fb), (da,db) in zip(focks,densities):
+			ea = fa@da@S - S@da@fa
+			eb = fb@db@S - S@db@fb
+			errorVectors.append( (ea,eb) )
 
+		N  = len(errorVectors)
+		P  = np.zeros((N+1,N+1))
 
-	def diisP(self,focks,densities):
+		P[:-1,-1] = -1
+		P[-1,:-1] = -1
+	
+		for i, (iEVA,iEVB)  in enumerate(errorVectors):
+			for j, (jEVA,jEVB) in enumerate(errorVectors):
+				P[i,j]  = np.vdot(iEVA,jEVA) + np.vdot(iEVB, jEVB)
+				P[i,j] /= 2
 
-		S = self.S
-		errorVectors = [ F@D@S - S@D@F for F,D in zip(focks,densities) ]
-		N = len(errorVectors)
-		P = np.zeros(( N+1, N+1))
-
-		for j in range(N):
-			P[-1,j] = P[j,-1] = -1
-			for k in range(N):
-				P[j,k] = np.vdot(errorVectors[j],errorVectors[k])
-
-		return P
-
-
-	def solveDIIS(self,Falphas,Dalphas,Fbetas,Dbetas):
+		f = np.array( [0]*N + [-1] )
+		q = np.linalg.solve(P, f)
 		
-		Pa = self.diisP( Falphas, Dalphas )
-		Pb = self.diisP( Fbetas, Dbetas )
+		weightFocks = [ (fa*q, fb*q) for q,(fa,fb) in zip(q,focks) ]
 
-		f = np.zeros(( Pa.shape[0] ))
-		f[-1] = -1
+		return tuple([sum(i) for i in zip(*weightFocks)])
 
-		q = np.linalg.solve( (Pa+Pb)/2, f)
-
-		fa = sum( [q[i]*F for i,F in enumerate(Falphas)] )
-		fb = sum( [q[i]*F for i,F in enumerate(Fbetas)] )
-
-		return fa, fb
-
-
-	def writeOutput(self):
-
-		if self.converged:
-			print("\nUHF procedure has converged.\nFinal UHF energy:{:20.11f}".format(self.E) )
-		if not self.converged:
-			print("UHF procedure did not converge. Sorry")
 
 
 if __name__ == '__main__':
@@ -179,12 +165,14 @@ if __name__ == '__main__':
 
 	basis = psi4.core.BasisSet.build(molecule, "BASIS", config['DEFAULT']['basis'],puream=0)
 	mints = psi4.core.MintsHelper(basis)
+	scf   = config['SCF']
 
-	diis      = bool( config['SCF']['diis'] )
-	diisNvec  = int( config['SCF']['diis_nvector'] ) 
-	diisStart = int( config['SCF']['diis_start'] )
-	maxiter   = int( config['SCF']['maxIter'] )
-	conv      = float( config['SCF']['conv']  )
+	uhf   = UHF(molecule,
+			  mints,
+			  scf['maxIter'],
+			  scf['conv'],
+			  scf['diis'],
+			  scf['diis_start'],
+			  scf['diis_nvector'])
 
-	uhf = UHF(molecule,mints,maxiter,conv,diis=diis,diisStart=diisStart,diisNvector=diisNvec)
 	uhf.computeEnergy()

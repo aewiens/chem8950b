@@ -2,7 +2,7 @@
 import psi4, numpy as np, configparser
 
 
-class RHF(object):
+class RHF:
 
 	def __init__(self,molecule,mints,maxiter,conv,diis=False,diisStart=0,diisNvector=0):
 
@@ -13,7 +13,6 @@ class RHF(object):
 		self.getIntegrals(mints)
 		self.maxiter = maxiter
 		self.conv    = conv
-
 		self.diis    = diis
 
 		if diis:
@@ -113,15 +112,13 @@ class RHF(object):
 
 		N = len(errorVectors)
 		P = np.zeros(( N+1, N+1))
-		f = np.zeros(( N+1 ))
 
-		for j in range(N):
-			P[-1,j] = P[j,-1] = -1
-			for k in range(N):
-				P[j,k] = np.vdot(errorVectors[j],errorVectors[k])
+		for i in range(N):
+			P[-1,i] = P[i,-1] = -1
+			for j in range(N):
+				P[i,j] = np.vdot(errorVectors[i],errorVectors[j])
 
-		f[-1] = -1
-
+		f = np.array( [0]*N + [-1] )
 		q = np.linalg.solve(P,f)
 
 		return sum( [q[i]*F for i,F in enumerate(focks)] )
