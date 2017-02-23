@@ -6,6 +6,7 @@ class UHF:
 
 	def __init__(self,options):
 
+		psi4.core.set_output_file("output.dat",False)
 		mol = psi4.geometry( options['DEFAULT']['molecule'] )
 		mol.update_geometry()
 
@@ -28,20 +29,21 @@ class UHF:
 
 		mints = psi4.core.MintsHelper(basis)
 
-		##   one-electron  ##
-		self.T = block_oei( mints.ao_kinetic() )
-		self.V = block_oei( mints.ao_potential() )
+		##  overlap  ##
 		self.S = block_oei( mints.ao_overlap() )                      
-
 		S = mints.ao_overlap()
 		S.power(-0.5,1.e-16)
 		self.X = block_oei( S.to_array() )
 
-		##  two-electron  ##
-		G = block_tei(np.array( mints.ao_eri() ) )
-		self.G = G.transpose((0,2,1,3))-G.transpose((0,2,3,1))
+		##   one-electron  ##
+		self.T = block_oei( mints.ao_kinetic() )
+		self.V = block_oei( mints.ao_potential() )
 
-		
+		##  2-electron (chemists' notation)  ##
+		G = block_tei(np.array( mints.ao_eri() ) )
+		self.G = G.transpose((0,2,1,3)) - G.transpose((0,2,3,1))
+	
+	
 	def computeEnergy(self):
 
 		H = self.T + self.V
@@ -51,7 +53,7 @@ class UHF:
 
 		for i in range(self.maxiter):
 
-			v = np.einsum("mnrs,ns->mr", G, self.D)
+			v  = np.einsum("mnrs,ns->mr",G,self.D)
 			F = H + v
 			e,tC = np.linalg.eigh(X@F@ X)
 
