@@ -1,59 +1,58 @@
 #!/usr/bin/env python3
-import psi4, numpy as np, configparser
+import psi4, numpy as np, configparser as cfp
 
 
 class UHF:
 
 	def __init__(self,options):
 
-		psi4.core.set_output_file("output.dat",False)
 		mol = psi4.geometry( options['DEFAULT']['molecule'] )
 		mol.update_geometry()
 
-		basis = psi4.core.BasisSet.build(mol, "BASIS", options['DEFAULT']['basis'],puream=0)
-		scf   = options['SCF']
+		self.basisName  = options['DEFAULT']['basis']
+		self.basis = psi4.core.BasisSet.build(mol, "BASIS", self.basisName, puream=0)
+		self.mints = psi4.core.MintsHelper(self.basis)
+		self.getIntegrals()
 
-		self.getIntegrals(basis)
-
-		self.nelec   = self.getNelec(mol)
-		self.conv    = 10**( -int( scf['conv'] ) )
-		self.maxiter = int( scf['max_iter'] )
+		self.conv    = 10**( -int( options['SCF']['conv'] ))
+		self.dConv   = 10**( -int( options['SCF']['d_conv'] ))
+		self.maxiter = int( options['SCF']['max_iter'] )
 		self.norb    = len(self.S)
+		self.nelec   = self.getNelec(mol)
+		self.nvirt   = self.norb - self.nelec
 
 		self.Vnu = mol.nuclear_repulsion_energy()
-		self.E   = 0.0
 		self.D   = np.zeros_like(self.S)
+		self.E   = 0.0
+		self.mol = mol
 
 
-	def getIntegrals(self,basis):
+	def getIntegrals(self):
+		mints  = self.mints
+		self.T = self.block_oei( mints.ao_kinetic() )
+		self.V = self.block_oei( mints.ao_potential() )
+		self.S = self.block_oei( mints.ao_overlap() )                      
 
-		mints = psi4.core.MintsHelper(basis)
-
-		##  overlap  ##
-		self.S = block_oei( mints.ao_overlap() )                      
 		S = mints.ao_overlap()
 		S.power(-0.5,1.e-16)
-		self.X = block_oei( S.to_array() )
+		self.X = self.block_oei( S )
 
-		##   one-electron  ##
-		self.T = block_oei( mints.ao_kinetic() )
-		self.V = block_oei( mints.ao_potential() )
+		G = self.block_tei(np.array( mints.ao_eri() ) )
+		self.G = G.transpose((0,2,1,3))-G.transpose((0,2,3,1))
 
-		##  2-electron (chemists' notation)  ##
-		G = block_tei(np.array( mints.ao_eri() ) )
-		self.G = G.transpose((0,2,1,3)) - G.transpose((0,2,3,1))
-	
-	
+
+		
 	def computeEnergy(self):
 
 		H = self.T + self.V
 		X = self.X
 		G = self.G
 		D = self.D
+		F = np.zeros_like(H)
 
 		for i in range(self.maxiter):
 
-			v  = np.einsum("mnrs,ns->mr",G,self.D)
+			v = np.einsum("mnrs,ns->mr", G, self.D)
 			F = H + v
 			e,tC = np.linalg.eigh(X@F@ X)
 
@@ -64,16 +63,19 @@ class UHF:
 			E0 = self.E
 			E  = np.trace( (H+0.5*v)@D) + self.Vnu
 			dE = np.fabs(E-E0)
+
+			dD = np.fabs( np.linalg.norm(D) - np.linalg.norm(self.D) )
 			
 			if __name__ == '__main__':
-				print("UHF  {:>4} {: >21.13}  {: >21.13}".format(i,E,dE))
+				print("@UHF-iter {:>4}{: >20.12f}{: >20.12f}{: >20.12f}".format(i,E,dE,dD))
 
 			self.E = E
 			self.C = C
 			self.e = e
 			self.D = D 
+			self.F = F
 
-			if dE < self.conv:
+			if dE < self.conv and dD < self.dConv:
 				break
 
 		return self.E
@@ -89,43 +91,30 @@ class UHF:
 		return int(nelec)
 
 
-	def psiSCF(self,options):
-		psi4.set_options({'basis': options['DEFAULT']['basis'],
-						  'scf_type': 'pk',
-						  'reference': 'uhf',
-						  'puream': 0,
-						  'print': 0 })
+	"""
+	spin-blocking functions: transform from spatial orbital {x_mu} basis to spin orbital basis {x_mu alpha, x_mu beta}
+	"""
+	def block_oei(self,A):
+		A = np.matrix(A)
+		O = np.zeros(A.shape)
+		return np.bmat( [[A,O],[O,A]] )
 
-		return psi4.energy('scf')
-			
 
-"""
-spin-blocking functions: transform from spatial orbital {x_mu} basis to spin orbital basis {x_mu alpha, x_mu beta}
-"""
-# 1-electron integrals
-def block_oei(A):
-    A = np.matrix(A)
-    O = np.zeros(A.shape)
-    return np.bmat( [[A,O],[O,A]] )
-
-# 2-electron integrals
-def block_tei(T):
-    t = np.array(T)
-    n = t.shape[0]
-    I2 = np.identity(2)
-    T = np.zeros( (2*n,2*n,2*n,2*n) )
-    for p in range(n):
-        for q in range(n):
-            T[p,q] = np.kron( I2, t[p,q] )
-            T[n:,n:] = T[:n,:n]
-    return T
+	def block_tei(self,T):
+		t = np.array(T)
+		n = t.shape[0]
+		I2 = np.identity(2)
+		T = np.zeros( (2*n,2*n,2*n,2*n) )
+		for p in range(n):
+			for q in range(n):
+				T[p,q] = np.kron( I2, t[p,q] )
+				T[n:,n:] = T[:n,:n]
+		return T
 
 
 if __name__ == '__main__':
 	
-	config = configparser.ConfigParser()
+	config = cfp.ConfigParser()
 	config.read('Options.ini')
-
 	uhf = UHF(config)
-	print( uhf.psiSCF(config) )
-	print( uhf.computeEnergy() )
+	uhf.computeEnergy()
