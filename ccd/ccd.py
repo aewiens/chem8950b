@@ -52,9 +52,8 @@ class CCD:
 
 		##  update  ##
 		tNew = t1 + 0.5*t2 + 0.5*t3 + t4P - 0.5*t5P - 0.5*t6P + 0.25*t7 + t8P
-		tNew *= Ep 
 
-		return tNew
+		return Ep*tNew
 
     
 	def computeEnergy(self):
@@ -85,6 +84,7 @@ class CCD:
 				print('----------------------------------------------------------------------')
 				break
 
+		print( self.t.shape )
 		return self.E0 + self.Ec
 
 
